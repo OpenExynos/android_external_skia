@@ -42,6 +42,9 @@ public:
         virtual ~BitmapProcShaderContext();
 
         void shadeSpan(int x, int y, SkPMColor dstC[], int count) override;
+#if defined(FIMG2D_ENABLED)
+        virtual void getSrcXY(SkPoint* pt) override;
+#endif
         ShadeProc asAShadeProc(void** ctx) override;
         void shadeSpan16(int x, int y, uint16_t dstC[], int count) override;
 

@@ -155,6 +155,9 @@ public:
          */
         virtual void shadeSpan(int x, int y, SkPMColor[], int count) = 0;
 
+#if defined(FIMG2D_ENABLED)
+        virtual void getSrcXY(SkPoint *pt) { }
+#endif
         typedef void (*ShadeProc)(void* ctx, int x, int y, SkPMColor[], int count);
         virtual ShadeProc asAShadeProc(void** ctx);
 

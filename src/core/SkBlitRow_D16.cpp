@@ -9,6 +9,9 @@
 #include "SkColorPriv.h"
 #include "SkDither.h"
 #include "SkMathPriv.h"
+#if defined(USES_SKIA_PREBUILT_LIBRARY) && defined(SK_CPU_ARM64)
+#include "Sk_Prebuilt_header.h"
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -49,17 +52,21 @@ static void S32A_D565_Opaque(uint16_t* SK_RESTRICT dst,
                                const SkPMColor* SK_RESTRICT src, int count,
                                U8CPU alpha, int /*x*/, int /*y*/) {
     SkASSERT(255 == alpha);
-
-    if (count > 0) {
-        do {
-            SkPMColor c = *src++;
-            SkPMColorAssert(c);
-//            if (__builtin_expect(c!=0, 1))
-            if (c) {
-                *dst = SkSrcOver32To16(c, *dst);
-            }
-            dst += 1;
-        } while (--count != 0);
+#if defined(USES_SKIA_PREBUILT_LIBRARY) && defined(SK_CPU_ARM64)
+    if (check_S32A_D565_Opaque_neon(dst, src, count, alpha))
+#endif
+    {
+        if (count > 0) {
+            do {
+                SkPMColor c = *src++;
+                SkPMColorAssert(c);
+//              if (__builtin_expect(c!=0, 1))
+                if (c) {
+                    *dst = SkSrcOver32To16(c, *dst);
+                }
+                dst += 1;
+            } while (--count != 0);
+        }
     }
 }
 

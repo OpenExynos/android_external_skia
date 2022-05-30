@@ -177,6 +177,21 @@ SkBitmapProcShader::BitmapProcShaderContext::~BitmapProcShaderContext() {
     #define TEST_BUFFER_EXTRA   0
 #endif
 
+#if defined(FIMG2D_ENABLED)
+void SkBitmapProcShader::BitmapProcShaderContext::getSrcXY(SkPoint *pt) {
+    const SkBitmapProcState& state = *fState;
+    SkPoint inv;
+    if (state.fInvProc == NULL) {
+        pt->fX = pt->fY = -1;
+        return;
+    }
+
+    state.fInvProc(state.fInvMatrix, SkIntToScalar(pt->fX) + SK_ScalarHalf,
+                   SkIntToScalar(pt->fY) + SK_ScalarHalf, &inv);
+    pt->fX = inv.fX;
+    pt->fY = inv.fY;
+}
+#endif
 void SkBitmapProcShader::BitmapProcShaderContext::shadeSpan(int x, int y, SkPMColor dstC[],
                                                             int count) {
     const SkBitmapProcState& state = *fState;

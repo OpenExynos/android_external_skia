@@ -16,6 +16,9 @@
 
 #include "SkColor_opts_neon.h"
 #include <arm_neon.h>
+#if defined(USES_SKIA_PREBUILT_LIBRARY) && defined(SK_CPU_ARM64)
+#include "Sk_Prebuilt_header.h"
+#endif
 
 #ifdef SK_CPU_ARM64
 static inline uint8x8x4_t sk_vld4_u8_arm64_3(const SkPMColor* SK_RESTRICT & src) {
@@ -981,168 +984,171 @@ void S32A_Opaque_BlitRow32_neon_src_alpha(SkPMColor* SK_RESTRICT dst,
 
     if (count <= 0)
     return;
-
-    /* Use these to check if src is transparent or opaque */
-    const unsigned int ALPHA_OPAQ  = 0xFF000000;
-    const unsigned int ALPHA_TRANS = 0x00FFFFFF;
+#if defined(USES_SKIA_PREBUILT_LIBRARY) && defined(SK_CPU_ARM64)
+    if (check_S32A_Opaque_BlitRow32_neon_src_alpha(dst, src, count, alpha))
+#endif
+    {
+        /* Use these to check if src is transparent or opaque */
+        const unsigned int ALPHA_OPAQ  = 0xFF000000;
+        const unsigned int ALPHA_TRANS = 0x00FFFFFF;
 
 #define UNROLL  4
-    const SkPMColor* SK_RESTRICT src_end = src + count - (UNROLL + 1);
-    const SkPMColor* SK_RESTRICT src_temp = src;
+        const SkPMColor* SK_RESTRICT src_end = src + count - (UNROLL + 1);
+        const SkPMColor* SK_RESTRICT src_temp = src;
 
-    /* set up the NEON variables */
-    uint8x8_t alpha_mask;
-    static const uint8_t alpha_mask_setup[] = {3,3,3,3,7,7,7,7};
-    alpha_mask = vld1_u8(alpha_mask_setup);
+        /* set up the NEON variables */
+        uint8x8_t alpha_mask;
+        static const uint8_t alpha_mask_setup[] = {3,3,3,3,7,7,7,7};
+        alpha_mask = vld1_u8(alpha_mask_setup);
 
-    uint8x8_t src_raw, dst_raw, dst_final;
-    uint8x8_t src_raw_2, dst_raw_2, dst_final_2;
-    uint8x8_t dst_cooked;
-    uint16x8_t dst_wide;
-    uint8x8_t alpha_narrow;
-    uint16x8_t alpha_wide;
+        uint8x8_t src_raw, dst_raw, dst_final;
+        uint8x8_t src_raw_2, dst_raw_2, dst_final_2;
+        uint8x8_t dst_cooked;
+        uint16x8_t dst_wide;
+        uint8x8_t alpha_narrow;
+        uint16x8_t alpha_wide;
 
-    /* choose the first processing type */
-    if( src >= src_end)
-        goto TAIL;
-    if(*src <= ALPHA_TRANS)
-        goto ALPHA_0;
-    if(*src >= ALPHA_OPAQ)
-        goto ALPHA_255;
-    /* fall-thru */
+        /* choose the first processing type */
+        if( src >= src_end)
+            goto TAIL;
+        if(*src <= ALPHA_TRANS)
+            goto ALPHA_0;
+        if(*src >= ALPHA_OPAQ)
+            goto ALPHA_255;
+        /* fall-thru */
 
 ALPHA_1_TO_254:
-    do {
+        do {
 
-        /* get the source */
-        src_raw = vreinterpret_u8_u32(vld1_u32(src));
-        src_raw_2 = vreinterpret_u8_u32(vld1_u32(src+2));
+            /* get the source */
+            src_raw = vreinterpret_u8_u32(vld1_u32(src));
+            src_raw_2 = vreinterpret_u8_u32(vld1_u32(src+2));
 
-        /* get and hold the dst too */
-        dst_raw = vreinterpret_u8_u32(vld1_u32(dst));
-        dst_raw_2 = vreinterpret_u8_u32(vld1_u32(dst+2));
+            /* get and hold the dst too */
+            dst_raw = vreinterpret_u8_u32(vld1_u32(dst));
+            dst_raw_2 = vreinterpret_u8_u32(vld1_u32(dst+2));
 
 
-        /* get the alphas spread out properly */
-        alpha_narrow = vtbl1_u8(src_raw, alpha_mask);
-        /* reflect SkAlpha255To256() semantics a+1 vs a+a>>7 */
-        /* we collapsed (255-a)+1 ... */
-        alpha_wide = vsubw_u8(vdupq_n_u16(256), alpha_narrow);
+            /* get the alphas spread out properly */
+            alpha_narrow = vtbl1_u8(src_raw, alpha_mask);
+            /* reflect SkAlpha255To256() semantics a+1 vs a+a>>7 */
+            /* we collapsed (255-a)+1 ... */
+            alpha_wide = vsubw_u8(vdupq_n_u16(256), alpha_narrow);
 
-        /* spread the dest */
-        dst_wide = vmovl_u8(dst_raw);
+            /* spread the dest */
+            dst_wide = vmovl_u8(dst_raw);
 
-        /* alpha mul the dest */
-        dst_wide = vmulq_u16 (dst_wide, alpha_wide);
-        dst_cooked = vshrn_n_u16(dst_wide, 8);
+            /* alpha mul the dest */
+            dst_wide = vmulq_u16 (dst_wide, alpha_wide);
+            dst_cooked = vshrn_n_u16(dst_wide, 8);
 
-        /* sum -- ignoring any byte lane overflows */
-        dst_final = vadd_u8(src_raw, dst_cooked);
+            /* sum -- ignoring any byte lane overflows */
+            dst_final = vadd_u8(src_raw, dst_cooked);
 
-        alpha_narrow = vtbl1_u8(src_raw_2, alpha_mask);
-        /* reflect SkAlpha255To256() semantics a+1 vs a+a>>7 */
-        /* we collapsed (255-a)+1 ... */
-        alpha_wide = vsubw_u8(vdupq_n_u16(256), alpha_narrow);
+            alpha_narrow = vtbl1_u8(src_raw_2, alpha_mask);
+            /* reflect SkAlpha255To256() semantics a+1 vs a+a>>7 */
+            /* we collapsed (255-a)+1 ... */
+            alpha_wide = vsubw_u8(vdupq_n_u16(256), alpha_narrow);
 
-        /* spread the dest */
-        dst_wide = vmovl_u8(dst_raw_2);
+            /* spread the dest */
+            dst_wide = vmovl_u8(dst_raw_2);
 
-        /* alpha mul the dest */
-        dst_wide = vmulq_u16 (dst_wide, alpha_wide);
-        dst_cooked = vshrn_n_u16(dst_wide, 8);
+            /* alpha mul the dest */
+            dst_wide = vmulq_u16 (dst_wide, alpha_wide);
+            dst_cooked = vshrn_n_u16(dst_wide, 8);
 
-        /* sum -- ignoring any byte lane overflows */
-        dst_final_2 = vadd_u8(src_raw_2, dst_cooked);
+            /* sum -- ignoring any byte lane overflows */
+            dst_final_2 = vadd_u8(src_raw_2, dst_cooked);
 
-        vst1_u32(dst, vreinterpret_u32_u8(dst_final));
-        vst1_u32(dst+2, vreinterpret_u32_u8(dst_final_2));
+            vst1_u32(dst, vreinterpret_u32_u8(dst_final));
+            vst1_u32(dst+2, vreinterpret_u32_u8(dst_final_2));
 
-        src += UNROLL;
-        dst += UNROLL;
+            src += UNROLL;
+            dst += UNROLL;
 
-        /* if 2 of the next pixels aren't between 1 and 254
-        it might make sense to go to the optimized loops */
-        if((src[0] <= ALPHA_TRANS && src[1] <= ALPHA_TRANS) || (src[0] >= ALPHA_OPAQ && src[1] >= ALPHA_OPAQ))
-            break;
+            /* if 2 of the next pixels aren't between 1 and 254
+               it might make sense to go to the optimized loops */
+            if((src[0] <= ALPHA_TRANS && src[1] <= ALPHA_TRANS) || (src[0] >= ALPHA_OPAQ && src[1] >= ALPHA_OPAQ))
+                break;
 
-    } while(src < src_end);
+        } while(src < src_end);
 
-    if (src >= src_end)
-        goto TAIL;
+        if (src >= src_end)
+            goto TAIL;
 
-    if(src[0] >= ALPHA_OPAQ && src[1] >= ALPHA_OPAQ)
-        goto ALPHA_255;
+        if(src[0] >= ALPHA_OPAQ && src[1] >= ALPHA_OPAQ)
+            goto ALPHA_255;
 
-    /*fall-thru*/
+        /*fall-thru*/
 
 ALPHA_0:
 
-    /*In this state, we know the current alpha is 0 and
-     we optimize for the next alpha also being zero. */
-    src_temp = src;  //so we don't have to increment dst every time
-    do {
-        if(*(++src) > ALPHA_TRANS)
-            break;
-        if(*(++src) > ALPHA_TRANS)
-            break;
-        if(*(++src) > ALPHA_TRANS)
-            break;
-        if(*(++src) > ALPHA_TRANS)
-            break;
-    } while(src < src_end);
+        /*In this state, we know the current alpha is 0 and
+          we optimize for the next alpha also being zero. */
+        src_temp = src;  //so we don't have to increment dst every time
+        do {
+            if(*(++src) > ALPHA_TRANS)
+                break;
+            if(*(++src) > ALPHA_TRANS)
+                break;
+            if(*(++src) > ALPHA_TRANS)
+                break;
+            if(*(++src) > ALPHA_TRANS)
+                break;
+        } while(src < src_end);
 
-    dst += (src - src_temp);
+        dst += (src - src_temp);
 
-    /* no longer alpha 0, so determine where to go next. */
-    if( src >= src_end)
-        goto TAIL;
-    if(*src >= ALPHA_OPAQ)
-        goto ALPHA_255;
-    else
-        goto ALPHA_1_TO_254;
+        /* no longer alpha 0, so determine where to go next. */
+        if( src >= src_end)
+            goto TAIL;
+        if(*src >= ALPHA_OPAQ)
+            goto ALPHA_255;
+        else
+            goto ALPHA_1_TO_254;
 
 ALPHA_255:
-    while((src[0] & src[1] & src[2] & src[3]) >= ALPHA_OPAQ) {
-        dst[0]=src[0];
-        dst[1]=src[1];
-        dst[2]=src[2];
-        dst[3]=src[3];
-        src+=UNROLL;
-        dst+=UNROLL;
-        if(src >= src_end)
-            goto TAIL;
-    }
-
-    //Handle remainder.
-    if(*src >= ALPHA_OPAQ) { *dst++ = *src++;
-        if(*src >= ALPHA_OPAQ) { *dst++ = *src++;
-            if(*src >= ALPHA_OPAQ) { *dst++ = *src++; }
+        while((src[0] & src[1] & src[2] & src[3]) >= ALPHA_OPAQ) {
+            dst[0]=src[0];
+            dst[1]=src[1];
+            dst[2]=src[2];
+            dst[3]=src[3];
+            src+=UNROLL;
+            dst+=UNROLL;
+            if(src >= src_end)
+                goto TAIL;
         }
-    }
 
-    if( src >= src_end)
-        goto TAIL;
-    if(*src <= ALPHA_TRANS)
-        goto ALPHA_0;
-    else
-        goto ALPHA_1_TO_254;
+        //Handle remainder.
+        if(*src >= ALPHA_OPAQ) { *dst++ = *src++;
+            if(*src >= ALPHA_OPAQ) { *dst++ = *src++;
+                if(*src >= ALPHA_OPAQ) { *dst++ = *src++; }
+            }
+        }
+
+        if( src >= src_end)
+            goto TAIL;
+        if(*src <= ALPHA_TRANS)
+            goto ALPHA_0;
+        else
+            goto ALPHA_1_TO_254;
 
 TAIL:
-    /* do any residual iterations */
-    src_end += UNROLL + 1;  //goto the real end
-    while(src != src_end) {
-        if( *src != 0 ) {
-            if( *src >= ALPHA_OPAQ ) {
-                *dst = *src;
+        /* do any residual iterations */
+        src_end += UNROLL + 1;  //goto the real end
+        while(src != src_end) {
+            if( *src != 0 ) {
+                if( *src >= ALPHA_OPAQ ) {
+                    *dst = *src;
+                }
+                else {
+                    *dst = SkPMSrcOver(*src, *dst);
+                }
             }
-            else {
-                *dst = SkPMSrcOver(*src, *dst);
-            }
+            src++;
+            dst++;
         }
-        src++;
-        dst++;
     }
-
 #undef    UNROLL
     return;
 }
@@ -1151,8 +1157,8 @@ TAIL:
  * portable version is in src/core/SkBlitRow_D32.cpp
  */
 void S32_Blend_BlitRow32_neon(SkPMColor* SK_RESTRICT dst,
-                              const SkPMColor* SK_RESTRICT src,
-                              int count, U8CPU alpha) {
+        const SkPMColor* SK_RESTRICT src,
+        int count, U8CPU alpha) {
     SkASSERT(alpha <= 255);
 
     if (count <= 0) {
@@ -1161,63 +1167,67 @@ void S32_Blend_BlitRow32_neon(SkPMColor* SK_RESTRICT dst,
 
     uint16_t src_scale = SkAlpha255To256(alpha);
     uint16_t dst_scale = 256 - src_scale;
+#if defined(USES_SKIA_PREBUILT_LIBRARY) && defined(SK_CPU_ARM64)
+    if (check_S32_Blend_BlitRow32_neon(dst, src, count, alpha))
+#endif
+    {
+        while (count >= 2) {
+            uint8x8_t vsrc, vdst, vres;
+            uint16x8_t vsrc_wide, vdst_wide;
 
-    while (count >= 2) {
-        uint8x8_t vsrc, vdst, vres;
-        uint16x8_t vsrc_wide, vdst_wide;
+            /* These commented prefetches are a big win for count
+             * values > 64 on an A9 (Pandaboard) but hurt by 10% for count = 4.
+             * They also hurt a little (<5%) on an A15
+             */
+            //__builtin_prefetch(src+32);
+            //__builtin_prefetch(dst+32);
 
-        /* These commented prefetches are a big win for count
-         * values > 64 on an A9 (Pandaboard) but hurt by 10% for count = 4.
-         * They also hurt a little (<5%) on an A15
-         */
-        //__builtin_prefetch(src+32);
-        //__builtin_prefetch(dst+32);
+            // Load
+            vsrc = vreinterpret_u8_u32(vld1_u32(src));
+            vdst = vreinterpret_u8_u32(vld1_u32(dst));
 
-        // Load
-        vsrc = vreinterpret_u8_u32(vld1_u32(src));
-        vdst = vreinterpret_u8_u32(vld1_u32(dst));
+            // Process src
+            vsrc_wide = vmovl_u8(vsrc);
+            vsrc_wide = vmulq_u16(vsrc_wide, vdupq_n_u16(src_scale));
 
-        // Process src
-        vsrc_wide = vmovl_u8(vsrc);
-        vsrc_wide = vmulq_u16(vsrc_wide, vdupq_n_u16(src_scale));
+            // Process dst
+            vdst_wide = vmull_u8(vdst, vdup_n_u8(dst_scale));
 
-        // Process dst
-        vdst_wide = vmull_u8(vdst, vdup_n_u8(dst_scale));
+            // Combine
+            vres = vshrn_n_u16(vdst_wide, 8) + vshrn_n_u16(vsrc_wide, 8);
 
-        // Combine
-        vres = vshrn_n_u16(vdst_wide, 8) + vshrn_n_u16(vsrc_wide, 8);
+            // Store
+            vst1_u32(dst, vreinterpret_u32_u8(vres));
 
-        // Store
-        vst1_u32(dst, vreinterpret_u32_u8(vres));
+            src += 2;
+            dst += 2;
+            count -= 2;
+        }
 
-        src += 2;
-        dst += 2;
-        count -= 2;
-    }
+        if (count == 1) {
+            uint8x8_t vsrc = vdup_n_u8(0), vdst = vdup_n_u8(0), vres;
+            uint16x8_t vsrc_wide, vdst_wide;
 
-    if (count == 1) {
-        uint8x8_t vsrc = vdup_n_u8(0), vdst = vdup_n_u8(0), vres;
-        uint16x8_t vsrc_wide, vdst_wide;
+            // Load
+            vsrc = vreinterpret_u8_u32(vld1_lane_u32(src, vreinterpret_u32_u8(vsrc), 0));
+            vdst = vreinterpret_u8_u32(vld1_lane_u32(dst, vreinterpret_u32_u8(vdst), 0));
 
-        // Load
-        vsrc = vreinterpret_u8_u32(vld1_lane_u32(src, vreinterpret_u32_u8(vsrc), 0));
-        vdst = vreinterpret_u8_u32(vld1_lane_u32(dst, vreinterpret_u32_u8(vdst), 0));
+            // Process
+            vsrc_wide = vmovl_u8(vsrc);
+            vsrc_wide = vmulq_u16(vsrc_wide, vdupq_n_u16(src_scale));
+            vdst_wide = vmull_u8(vdst, vdup_n_u8(dst_scale));
+            vres = vshrn_n_u16(vdst_wide, 8) + vshrn_n_u16(vsrc_wide, 8);
 
-        // Process
-        vsrc_wide = vmovl_u8(vsrc);
-        vsrc_wide = vmulq_u16(vsrc_wide, vdupq_n_u16(src_scale));
-        vdst_wide = vmull_u8(vdst, vdup_n_u8(dst_scale));
-        vres = vshrn_n_u16(vdst_wide, 8) + vshrn_n_u16(vsrc_wide, 8);
-
-        // Store
-        vst1_lane_u32(dst, vreinterpret_u32_u8(vres), 0);
+            // Store
+            vst1_lane_u32(dst, vreinterpret_u32_u8(vres), 0);
+        }
     }
 }
 
 #ifdef SK_CPU_ARM32
 void S32A_Blend_BlitRow32_neon(SkPMColor* SK_RESTRICT dst,
-                         const SkPMColor* SK_RESTRICT src,
-                         int count, U8CPU alpha) {
+                        const SkPMColor* SK_RESTRICT src,
+                        int count, U8CPU alpha) {
 
     SkASSERT(255 >= alpha);
 

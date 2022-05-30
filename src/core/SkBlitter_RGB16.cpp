@@ -16,6 +16,10 @@
 #include "SkUtilsArm.h"
 #include "SkXfermode.h"
 
+#if defined(USES_SKIA_PREBUILT_LIBRARY) && defined(SK_CPU_ARM64)
+#include "Sk_Prebuilt_header.h"
+#endif
+
 #if SK_MIPS_HAS_DSP
 extern void blitmask_d565_opaque_mips(int width, int height, uint16_t* device,
                                       unsigned deviceRB, const uint8_t* alpha,
@@ -569,6 +573,28 @@ const SkBitmap* SkRGB16_Blitter::justAnOpaqueColor(uint32_t* value) {
     return NULL;
 }
 
+static uint32_t pmcolor_to_expand16(SkPMColor c) {
+    unsigned r = SkGetPackedR32(c);
+    unsigned g = SkGetPackedG32(c);
+    unsigned b = SkGetPackedB32(c);
+    return (g << 24) | (r << 13) | (b << 2);
+}
+static inline void blend32_16_row(SkPMColor src, uint16_t dst[], int count) {
+    SkASSERT(count > 0);
+    uint32_t src_expand = pmcolor_to_expand16(src);
+    unsigned scale = SkAlpha255To256(0xFF - SkGetPackedA32(src)) >> 3;
+#if defined(USES_SKIA_PREBUILT_LIBRARY) && defined(SK_CPU_ARM64)
+    if (check_blitH_NEON(dst, count, src_expand, scale))
+#endif
+    {
+        do {
+            uint32_t dst_expand = SkExpand_rgb_16(*dst) * scale;
+            *dst = SkCompact_rgb_16((src_expand + dst_expand) >> 5);
+            dst += 1;
+        } while (--count != 0);
+    }
+}
+
 void SkRGB16_Blitter::blitH(int x, int y, int width) {
     SkASSERT(width > 0);
     SkASSERT(x + width <= fDevice.width());
@@ -599,10 +625,20 @@ void SkRGB16_Blitter::blitAntiH(int x, int y,
             unsigned scale5 = SkAlpha255To256(aa) * scale >> (8 + 3);
             uint32_t src32 =  srcExpanded * scale5;
             scale5 = 32 - scale5;
-            do {
-                uint32_t dst32 = SkExpand_rgb_16(*device) * scale5;
-                *device++ = SkCompact_rgb_16((src32 + dst32) >> 5);
-            } while (--count != 0);
+#if defined(USES_SKIA_PREBUILT_LIBRARY) && defined(SK_CPU_ARM64)
+            if (check_blitH_NEON(device, count, src32, scale5))
+#endif
+            {
+                do {
+                    uint32_t dst32 = SkExpand_rgb_16(*device) * scale5;
+                    *device++ = SkCompact_rgb_16((src32 + dst32) >> 5);
+                } while (--count != 0);
+            }
+#if defined(USES_SKIA_PREBUILT_LIBRARY) && defined(SK_CPU_ARM64)
+            else {
+                device += count;
+            }
+#endif
             continue;
         }
         device += count;

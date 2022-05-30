@@ -756,6 +756,38 @@ LOCAL_SRC_FILES_arm64 += \
 	src/opts/SkXfermode_opts_arm.cpp \
 	src/opts/SkXfermode_opts_arm_neon.cpp
 
+# for FIMG2D acceleration #
+ifeq ($(BOARD_USES_SKIA_FIMGAPI),true)
+LOCAL_CFLAGS += -DFIMG2D_ENABLED
+LOCAL_C_INCLUDES += $(TOP)/hardware/samsung_slsi/exynos/include \
+	$(TOP)/hardware/samsung_slsi/$(TARGET_SOC)/include
+ifeq ($(BOARD_USES_FIMGAPI_V5X),true)
+# since 3.18 kernel
+ifneq ($(filter 3.18, $(TARGET_LINUX_KERNEL_VERSION)),)
+LOCAL_SRC_FILES += src/core/SkFimgApi5x_v2.cpp
+else
+LOCAL_SRC_FILES += src/core/SkFimgApi5x.cpp
+endif
+LOCAL_SHARED_LIBRARIES += libfimg
+LOCAL_CFLAGS += -DFIMGAPI_V5X
+else
+LOCAL_SRC_FILES += src/core/SkFimgApi4x.cpp
+LOCAL_SHARED_LIBRARIES += libfimg
+endif
+ifeq ($(BOARD_USES_SKIA_FIMGAPI_BOOSTUP),true)
+LOCAL_CFLAGS += -DFIMG2D_BOOSTUP
+LOCAL_C_INCLUDES += $(TOP)/vendor/samsung_slsi/exynos/include
+LOCAL_SHARED_LIBRARIES += libfimg2d_board
+endif
+endif
+
+ifeq ($(BOARD_USES_SKIA_PREBUILT_LIBRARY),true)
+LOCAL_SHARED_LIBRARIES += libdl
+LOCAL_CFLAGS += -DUSES_SKIA_PREBUILT_LIBRARY
+LOCAL_SRC_FILES_arm64 += \
+	src/core/Sk_Prebuilt_header.cpp
+endif
+
 include $(BUILD_SHARED_LIBRARY)
 
 #############################################################
